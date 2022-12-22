@@ -1,0 +1,4 @@
+*.vim
+CPU.hdl
+riscv-spec-20191213.pdf
+a.out

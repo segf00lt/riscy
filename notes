@@ -1,0 +1,34 @@
+########################
+######## RISC-V ########
+########################
+
+The immediate variants of riscv instructions allow performing an operation
+between a register and a constant instead of 2 registers, e.g. `addi x2 x3 -10`
+as opposed to a normal `add x2 x3 x4`.
+
+Endiannes refers to the address of the most and least significant bytes of a word.
+A big-endian system stores the most significant byte of a word at the smallest
+memory address and the least significant byte at the largest. A little-endian
+system stores the least-significant byte at the smallest address.
+
+All RISC-V instructions begin with 0b11 (at inst[1:0])
+
+
+# OPCODES (and instructions)
+
+type	opcode    msb	 lsb
+I	LOAD	0b_00_000_11 (LB, LH, LW, LBU, LHU)
+S	STORE	0b_01_000_11 (SB, SH, SW)
+B	BRANCH	0b_11_000_11 (BEQ, BNE, BLT, BGE, BLTU, BGEU)
+I	JALR	0b_11_001_11 (JALR)
+J	JAL	0b_11_011_11 (JAL)
+I	OPIMM	0b_01_100_11 (ADDI, SLTI, SLTIU, XORI, ORI, ANDI, SLLI, SRLI, SRAI)
+R	OP	0b_00_100_11 (ADD, SUB, SLL, SLT, SLTU, XOR, SRL, SRA, OR, AND)
+U	AUIPC	0b_00_101_11 (AUIPC)
+U	LUI	0b_01_101_11 (LUI)
+I	SYSTEM	0b_11_100_11 (ECALL, EBREAK)
+_	MISCMEM	0b_00_011_11 (FENCE)
+
+we don't need to implement FENCE on a single core processor
+
+SRAI is shift right arithmetic which copies the sign bit into vacant bits

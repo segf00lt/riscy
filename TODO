@@ -1,0 +1,7 @@
+TODO
+
+implement RV32I core in verilog
+
+add pipelining and branch prediction
+
+look into out of order processing
