@@ -101,6 +101,7 @@ always @(posedge clk) begin
 
 	wd <= write ? data_in : data;
 
+	// load
 	case(data_addr[1:0])
 		2'b00: rd <= data;
 		2'b01: rd <= {8'b0, data[31:8]};
@@ -108,9 +109,8 @@ always @(posedge clk) begin
 		2'b11: rd <= {24'b0, data[31:24]};
 	endcase
 
-	// load
 	case({sign, data_size})
-		2'b000: data_out <= {24'b0, rd[7:0}; // byte
+		2'b000: data_out <= {24'b0, rd[7:0]}; // byte
 		2'b001: data_out <= {16'b0, rd[15:0]}; // half
 		2'b100: data_out <= {{24{rd[7]}}, rd[7:0]}; // signed byte
 		2'b101: data_out <= {{16{rd[15]}}, rd[15:0]}; // signed half
@@ -119,18 +119,19 @@ always @(posedge clk) begin
 	endcase
 
 	// store
-	case({write,data_size})
-		3'b100: memory[data_addr[13:2]] <=
-			data_addr[1] ?
-			// top half
-			(data_addr[0] ? {wd[7:0], data[23:0]} : {data[31:24], wd[7:0], data[15:0]}) :
-			// bottom half
-			(data_addr[0] ? {data[31:16], wd[7:0], data[7:0]} : {data[31:8], wd[7:0]}); // byte
-		3'b101: memory[data_addr[13:2]] <=
-			data_addr[1] ? {wd[15:0], data[15:0]} : {data[31:16], wd[15:0]}; // half
-		3'b110: memory[data_addr[13:2]] <= data; // word
-		default: memory[data_addr[13:2]] <= data; // do nothing
-	endcase
+	if(write) begin
+		case(data_size)
+			2'b00: memory[data_addr[13:2]] <=
+				data_addr[1] ?
+				// top half
+				(data_addr[0] ? {wd[7:0], data[23:0]} : {data[31:24], wd[7:0], data[15:0]}) :
+					// bottom half
+		       (data_addr[0] ? {data[31:16], wd[7:0], data[7:0]} : {data[31:8], wd[7:0]}); // byte
+		       2'b01: memory[data_addr[13:2]] <=
+			       data_addr[1] ? {wd[15:0], data[15:0]} : {data[31:16], wd[15:0]}; // half
+		       2'b10: memory[data_addr[13:2]] <= wd; // word
+	       endcase
+       end
 end
 endmodule
 

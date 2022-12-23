@@ -32,3 +32,5 @@ _	MISCMEM	0b_00_011_11 (FENCE)
 we don't need to implement FENCE on a single core processor
 
 SRAI is shift right arithmetic which copies the sign bit into vacant bits
+
+mostly I want to complain about verilog

@@ -1,5 +1,7 @@
 TODO
 
+learn to write testbenches!!!!!!!!!
+
 implement RV32I core in verilog
 
 add pipelining and branch prediction
