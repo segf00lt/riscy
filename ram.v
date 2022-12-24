@@ -16,12 +16,14 @@ endmodule
 
 module ram_tb();
 parameter TEST_COUNT = 8;
-reg clk = 0, write, block = 0;
+reg clk = 0, write = 1;
 reg [11:0] addr;
 reg [31:0] data;
 wire [31:0] out;
 reg [31:0] tmp;
 reg [31:0] test_values [0:TEST_COUNT-1]; // 3 test values
+integer count = 0;
+reg tick = 0;
 
 ram r(
 	.clk(clk),
@@ -33,6 +35,9 @@ ram r(
 
 
 always #1 clk = !clk;
+always #2 write = !write;
+always #4 count = count + 1;
+always #1 tick = clk & !write;
 
 initial begin
 	test_values[0] = 32'hfefe;
@@ -43,17 +48,26 @@ initial begin
 	test_values[5] = 32'hbbbb;
 	test_values[6] = 32'h0000;
 	test_values[7] = 32'h6969;
-	write = 0;
 	addr = 0;
-	data = 0;
-	for(integer i = 0; i < TEST_COUNT; i++) begin
-		write = 1;
-		addr = i;
-		data = test_values[i];
-		#2 write = 0;
-		#2 $display("RAM[%x] -> %x",addr,out);
-	end
+	data = test_values[0];
+	$dumpfile("test_ram_x.vcd");
+	$dumpvars;
+	#32
+	//for(integer i = 0; i < TEST_COUNT; i++) begin
+	//	addr = count;
+	//	data = test_values[count];
+	//	#4 $display("RAM[%x] -> %x",addr,out);
+	//end
 	$finish;
+end
+
+always @(negedge clk) begin
+	addr <= count;
+	data <= test_values[count];
+end
+
+always @(negedge tick) begin
+	$display("testing RAM[%x] -> %x",addr,out);
 end
 
 //initial begin
