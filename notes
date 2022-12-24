@@ -33,4 +33,20 @@ we don't need to implement FENCE on a single core processor
 
 SRAI is shift right arithmetic which copies the sign bit into vacant bits
 
+# verilog
+
 mostly I want to complain about verilog
+
+When testing sequetial logic circuits we have to generate various square waves
+to stimulate the dut
+
+Depending on the complexity of the dut I guess it's useful to write a whole
+other device (likeley some kind of state machine) to generate the stimulus
+
+To verify the test passed we can then either
+
+- $dumpvars to a vcd file and diff (or view in gtkwave)
+- or $display some stuff
+
+$dumpvars is probably better
+$display and $monitor seem more useful as quick and dirty debug outputs

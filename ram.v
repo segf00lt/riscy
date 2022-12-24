@@ -22,8 +22,8 @@ reg [31:0] data;
 wire [31:0] out;
 reg [31:0] tmp;
 reg [31:0] test_values [0:TEST_COUNT-1]; // 3 test values
-integer count = 0;
-reg tick = 0;
+//integer count = 0;
+//reg tick = 0;
 
 ram r(
 	.clk(clk),
@@ -33,12 +33,33 @@ ram r(
 	.out(out)
 );
 
-
 always #1 clk = !clk;
 always #2 write = !write;
-always #4 count = count + 1;
-always #1 tick = clk & !write;
+always #4 addr = addr + 1;
+//always #1 tick = clk & !write;
 
+always @(negedge clk) begin
+	//addr <= count;
+	data <= test_values[addr];
+end
+
+//always @(tick) begin
+//	$display("testing RAM[%x] -> %x",addr,out);
+//end
+
+/* NOTE
+* When testing sequetial logic circuits we have
+* to generate various square waves to stimulate
+* the dut
+* Depending on the complexity of the dut I guess
+* it's useful to write a whole other device (likeley
+* some kind of state machine) to generate the stimulus
+* To verify the test passed we can then either
+* - $dumpvars to a vcd file and diff (or view in gtkwave)
+* - or $display some stuff
+* the former is probably better, $display and $monitor seem
+* more useful as quick and dirty debug outputs
+*/
 initial begin
 	test_values[0] = 32'hfefe;
 	test_values[1] = 32'habba;
@@ -50,76 +71,12 @@ initial begin
 	test_values[7] = 32'h6969;
 	addr = 0;
 	data = test_values[0];
-	$dumpfile("test_ram_x.vcd");
+	$dumpfile("test_ram.vcd");
 	$dumpvars;
 	#32
-	//for(integer i = 0; i < TEST_COUNT; i++) begin
-	//	addr = count;
-	//	data = test_values[count];
-	//	#4 $display("RAM[%x] -> %x",addr,out);
-	//end
+	for(integer i = 0; i < TEST_COUNT; i++)
+		$display("RAM[%0x] -> %x",i,r.mem[i]);
 	$finish;
 end
-
-always @(negedge clk) begin
-	addr <= count;
-	data <= test_values[count];
-end
-
-always @(negedge tick) begin
-	$display("testing RAM[%x] -> %x",addr,out);
-end
-
-//initial begin
-//	#16
-//	$finish;
-//end
-//
-//always @(posedge clk) begin
-//	addr <= i;
-//	data <= test_values[i];
-//end
-//
-//always @(posedge write)
-//	$display("RAM[%x] -> %x",addr,out);
-
-/*
-initial begin
-	addr = 0;
-	write = 1;
-	data = 32'hfefe;
-	#2 // tick
-	$display("%1d",clk);
-	write = 0; // disable write
-	#2 // tock
-	$display("%1d",clk);
-	$display("RAM[%x] -> %x",addr,out);
-	#2
-	$display("%1d",clk);
-	$display("RAM[%x] -> %x",addr,out);
-	addr = 1;
-	write = 1;
-	data = 32'h1313;
-	#2
-	$display("%1d",clk);
-	write = 0;
-	#2
-	$display("RAM[%x] -> %x",addr,out);
-	#2
-	addr = 0;
-	#2
-	$display("RAM[%x] -> %x",addr,out);
-	tmp = out;
-	#2
-	addr = 1;
-	write = 1;
-	data = tmp;
-	#2
-	write = 0;
-	#2
-	$display("RAM[%x] -> %x",addr,out);
-	$finish;
-end
-*/
 
 endmodule
