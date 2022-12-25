@@ -1,36 +1,33 @@
 module alu(
 	input [31:0] x, y,
+	input alt,
 	input [3:0] op,
 	output reg [31:0] out
 );
-parameter ADD = 4'b0000;
-parameter SUB = 4'b1000;
-parameter SLL = 4'b0001;
-parameter SLT = 4'b0010;
-parameter SLTU = 4'b0011;
-parameter XOR = 4'b0100;
-parameter SRL = 4'b0101;
-parameter SRA = 4'b1101;
-parameter OR = 4'b0110;
-parameter AND = 4'b0111;
+parameter AS = 3'b000;
+parameter SLL = 3'b001;
+parameter SLT = 3'b010;
+parameter SLTU = 3'b011;
+parameter XOR = 3'b100;
+parameter SR = 3'b101;
+parameter OR = 3'b110;
+parameter AND = 3'b111;
 
 always @(*) begin
 	case(op)
-		ADD: out = x + y;
-		SUB: out = x - y;
+		AS: out = alt ? x - y : x + y;
 		SLL: out = x << y[4:0];
 		SLT: out = {31'b0, $signed(x) < $signed(y)};
 		SLTU: out = {31'b0, x < y};
 		XOR: out = x ^ y;
-		SRL: out = x >> y;
-		SRA: out = x >>> y;
+		SR: out = alt ? x >>> y : x >> y;
 		OR: out = x | y;
 		AND: out = x & y;
 	endcase
 end
 endmodule
 
-module cmp(
+module compare(
 	input [31:0] x, y,
 	input [2:0] op,
 	output reg out
@@ -129,19 +126,57 @@ end
 endmodule
 
 module regfile(
-	input [31:0] in,
-	input [3:0] addr,
-	input write,
-	output reg [31:0] out
+	input clk,
+	input [31:0] rd,
+	input [4:0] rd_addr, rs1_addr, rs2_addr,
+	input w_en,
+	output reg [31:0] rs1_out, rs2_out
 );
 reg [31:0] registers[0:31];
+
+always @(posedge clk) begin
+	if(w_en)
+		registers[rd_addr] <= rd;
+	else begin
+		rs1_out <= registers[rs1_addr];
+		rs2_out <= registers[rs2_addr];
+	end
+end
+
 endmodule
 
-module ctrl(
+// TODO
+module decode(
+	input [31:0] inst
+	output alt,
+);
+wire [6:0] opcode;
+wire [2:0] funct3;
+wire [6:0] funct7;
+wire [4:0] rs2, rs1, rd;
+wire [31:0] imm_i, imm_s, imm_b, imm_u, imm_j;
+
+assign opcode = inst[6:0];
+assign funct3 = inst[14:12];
+assign funct7 = inst[31:25];
+assign {rs2, rs1, rd} = {inst[24:20], inst[19:15], inst[11:7]};
+assign imm_i = {{20{inst[31]}}, inst[31:20]};
+assign imm_s = {{20{inst[31]}}, inst[31:25], inst[11:7]};
+assign imm_b = {{19{inst[31]}}, inst[31], inst[7], inst[30:25], inst[11:8], 1'b0};
+assign imm_u = {inst[31:12], 12'b0};
+assign imm_j = {{11{inst[31]}}, inst[31], inst[19:12], inst[20], inst[30:21], 1'b0};
+
+assign alt = funct7[5];
+endmodule
+
+module control(
 );
 endmodule
 
 module cpu(
+	input clk, reset,
+	output reg trap,
+	output reg [31:0] pc
 );
 parameter LOAD = 7'b00000_11;
 parameter STORE = 7'b01000_11;
