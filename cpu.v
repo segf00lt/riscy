@@ -150,6 +150,9 @@ end
 
 endmodule
 
+/* NOTE
+* maybe output's should be regs?
+*/
 module ctrl(
 	input [31:0] inst,
 	output [4:0] alu_s2, alu_s1, alu_dest,
