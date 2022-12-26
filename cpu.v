@@ -2,7 +2,7 @@ module alu(
 	input [31:0] x, y,
 	input alt,
 	input [3:0] op,
-	output reg [31:0] out
+	output [31:0] out
 );
 parameter AS = 3'b000;
 parameter SLL = 3'b001;
@@ -12,25 +12,28 @@ parameter XOR = 3'b100;
 parameter SR = 3'b101;
 parameter OR = 3'b110;
 parameter AND = 3'b111;
+reg [31:0] result;
+
+assign out = result;
 
 always @(*) begin
 	case(op)
-		AS: out = alt ? x - y : x + y;
-		SLL: out = x << y[4:0];
-		SLT: out = {31'b0, $signed(x) < $signed(y)};
-		SLTU: out = {31'b0, x < y};
-		XOR: out = x ^ y;
-		SR: out = alt ? x >>> y : x >> y;
-		OR: out = x | y;
-		AND: out = x & y;
+		AS: result = alt ? x - y : x + y;
+		SLL: result = x << y[4:0];
+		SLT: result = {31'b0, $signed(x) < $signed(y)};
+		SLTU: result = {31'b0, x < y};
+		XOR: result = x ^ y;
+		SR: result = alt ? x >>> y : x >> y;
+		OR: result = x | y;
+		AND: result = x & y;
 	endcase
 end
 endmodule
 
-module compare(
+module cmp(
 	input [31:0] x, y,
 	input [2:0] op,
-	output reg out
+	output out
 );
 parameter EQ = 3'b000;
 parameter NE = 3'b001;
@@ -39,14 +42,16 @@ parameter GE = 3'b101;
 parameter LTU = 3'b110;
 parameter GEU = 3'b111;
 
+reg result;
+
 always @(*) begin
 	case(op)
-		EQ: out = x == y;
-		NE: out = x != y;
-		LT: out = $signed(x) < $signed(y);
-		GE: out = $signed(x) >= $signed(y);
-		LTU: out = x < y;
-		GEU: out = x >= y;
+		EQ: result = x == y;
+		NE: result = x != y;
+		LT: result = $signed(x) < $signed(y);
+		GE: result = $signed(x) >= $signed(y);
+		LTU: result = x < y;
+		GEU: result = x >= y;
 	endcase
 end
 endmodule
@@ -145,32 +150,62 @@ end
 
 endmodule
 
-// TODO
-module decode(
-	input [31:0] inst
-	output alt,
+module ctrl(
+	input [31:0] inst,
+	output [4:0] alu_s2, alu_s1, alu_dest,
+	output [4:0] cmp_s2, cmp_s1,
+	output [2:0] funct,
+	output [31:0] imm;
+	output alu_alt,
+	output regwrite_src, // if 0 then alu.out else ram.out
+	output regwrite_en,
+	output jump_en
 );
-wire [6:0] opcode;
-wire [2:0] funct3;
-wire [6:0] funct7;
-wire [4:0] rs2, rs1, rd;
-wire [31:0] imm_i, imm_s, imm_b, imm_u, imm_j;
+parameter LOAD = 7'b00000_11; 
+parameter STORE = 7'b01000_11; 
+parameter BRANCH = 7'b11000_11; 
+parameter JALR = 7'b11001_11; 
+parameter JAL = 7'b11011_11; 
+parameter OPIMM = 7'b01100_11; 
+parameter OP = 7'b00100_11; 
+parameter AUIPC = 7'b00101_11; 
+parameter LUI = 7'b01101_11; 
+parameter SYSTEM = 7'b11100_11;
+parameter MISCMEM = 7'b00011_11; 
 
-assign opcode = inst[6:0];
-assign funct3 = inst[14:12];
-assign funct7 = inst[31:25];
-assign {rs2, rs1, rd} = {inst[24:20], inst[19:15], inst[11:7]};
-assign imm_i = {{20{inst[31]}}, inst[31:20]};
-assign imm_s = {{20{inst[31]}}, inst[31:25], inst[11:7]};
-assign imm_b = {{19{inst[31]}}, inst[31], inst[7], inst[30:25], inst[11:8], 1'b0};
-assign imm_u = {inst[31:12], 12'b0};
-assign imm_j = {{11{inst[31]}}, inst[31], inst[19:12], inst[20], inst[30:21], 1'b0};
+reg [31:0] immediate;
 
-assign alt = funct7[5];
-endmodule
+/* instruction decode */
+wire [6:0] opcode = inst[6:0];
+wire [6:0] funct7 = inst[31:25];
+wire [2:0] funct3 = inst[14:12];
+wire [4:0] rs2 = inst[24:20], rs1 = inst[19:15], rd = inst[11:7];
+wire [31:0] imm_i = {{20{inst[31]}}, inst[31:20]};
+wire [31:0] imm_s = {{20{inst[31]}}, inst[31:25], inst[11:7]};
+wire [31:0] imm_b = {{19{inst[31]}}, inst[31], inst[7], inst[30:25], inst[11:8], 1'b0};
+wire [31:0] imm_u = {inst[31:12], 12'b0};
+wire [31:0] imm_j = {{11{inst[31]}}, inst[31], inst[19:12], inst[20], inst[30:21], 1'b0};
 
-module control(
-);
+assign funct = (opcode == JAL || opcode == JALR) ? funct3 : 3'b0;
+assign {alu_s2, alu_s1} = (opcode == JAL || opcode == JALR) ? {5'd33, 5'b0} : {rs2, rs1};
+assign {cmp_s2, cmp_s1} = (opcode == JAL || opcode == JALR) ? 10'b0 : {rs2, rs1};
+assign alu_dest = rd;
+assign imm = immediate;
+assign alu_alt = funct7[5];
+assign regwrite_src = opcode == LOAD;
+assign regwrite_en = !(opcode == STORE || opcode == BRANCH || opcode == SYSTEM);
+assign jump_en = opcode == BRANCH || opcode == JALR || opcode == JAL;
+
+always @(*) begin
+	immediate <= 0;
+	case(opcode)
+		JALR: OPIMM: immediate <= imm_i;
+		STORE: immediate <= imm_s
+		BRANCH: immediate <= imm_b;
+		LUI: AUIPC: immediate <= imm_u;
+		JAL: immediate <= imm_j;
+	endcase
+end
 endmodule
 
 module cpu(
@@ -178,16 +213,5 @@ module cpu(
 	output reg trap,
 	output reg [31:0] pc
 );
-parameter LOAD = 7'b00000_11;
-parameter STORE = 7'b01000_11;
-parameter BRANCH = 7'b11000_11;
-parameter JALR = 7'b11001_11;
-parameter JAL = 7'b11011_11;
-parameter OPIMM = 7'b01100_11;
-parameter OP = 7'b00100_11;
-parameter AUIPC = 7'b00101_11;
-parameter LUI = 7'b01101_11;
-parameter SYSTEM = 7'b11100_11;
-parameter MISCMEM = 7'b00011_11;
 
 endmodule
