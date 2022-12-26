@@ -144,6 +144,7 @@ end
 endmodule
 
 module ctrl(
+	input clk,
 	input [31:0] inst,
 	output reg [4:0] alu_s2, alu_s1, alu_dest,
 	output reg [4:0] cmp_s2, cmp_s1,
@@ -184,7 +185,7 @@ wire is_immediate =
 	opcode == JALR || opcode == OPIMM || opcode == STORE || opcode == LOAD ||
 	opcode == BRANCH || opcode == LUI || opcode == AUIPC || opcode == JAL;
 
-always @(*) begin
+always @(posedge clk) begin
 	funct = uncond_jump ? 3'b0 : funct3;
 	alu_s1 = add_to_pc ? 5'b0 : rs1;
 	alu_s2 = (add_to_pc || is_immediate) 5'b0 : rs2;
