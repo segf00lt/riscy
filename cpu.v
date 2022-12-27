@@ -1,7 +1,7 @@
 module alu(
 	input [31:0] x, y,
 	input alt,
-	input [3:0] op,
+	input [2:0] op,
 	output reg [31:0] out
 );
 parameter AS = 3'b000;
@@ -127,18 +127,19 @@ endmodule
 module regfile(
 	input clk,
 	input [31:0] rd,
-	input [4:0] rd_addr, rs1_addr, rs2_addr,
+	input [4:0] rd_addr, r1_addr, r2_addr,
 	input w_en,
-	output reg [31:0] rs1_out, rs2_out
+	output reg [31:0] r1_out, r2_out
 );
 reg [31:0] registers[0:31];
 
 always @(posedge clk) begin
+	registers[0] <= 0;
 	if(w_en)
 		registers[rd_addr] <= rd;
 	else begin
-		rs1_out <= registers[rs1_addr];
-		rs2_out <= registers[rs2_addr];
+		r1_out <= registers[r1_addr];
+		r2_out <= registers[r2_addr];
 	end
 end
 endmodule
@@ -146,15 +147,15 @@ endmodule
 module ctrl(
 	input clk,
 	input [31:0] inst,
-	output reg [4:0] alu_s2, alu_s1, alu_dest,
-	output reg [4:0] cmp_s2, cmp_s1,
+	output reg [4:0] r2, r1, dest_reg,
 	output reg [2:0] funct,
 	output reg [31:0] imm,
 	output reg alu_alt,
-	output reg regwrite_src, // if 0 then alu.out else ram.out
-	output reg regwrite_en,
+	output reg memrd_en,
+	output reg memwr_en,
+	output reg regw_en,
 	output reg jump_en,
-	output reg pcadd_en,
+	output reg alupc_en
 );
 parameter LOAD = 7'b00000_11; 
 parameter STORE = 7'b01000_11; 
@@ -179,23 +180,29 @@ wire [31:0] imm_b = {{19{inst[31]}}, inst[31], inst[7], inst[30:25], inst[11:8],
 wire [31:0] imm_u = {inst[31:12], 12'b0};
 wire [31:0] imm_j = {{11{inst[31]}}, inst[31], inst[19:12], inst[20], inst[30:21], 1'b0};
 
-wire uncond_jump = opcode == JAL || opcode == JALR;
-wire add_to_pc = opcode == JAL || opcode == JALR || opcode == AUIPC;
+wire is_jal = opcode == JAL, is_jalr = opcode == JALR,
+	is_auipc = opcode == AUIPC, is_opimm = opcode == OPIMM,
+	is_store = opcode == STORE, is_load = opcode == LOAD,
+	is_branch = opcode == BRANCH, is_lui = opcode == LUI,
+	is_system = opcode == SYSTEM;
+
+wire uncond_jump = is_jal | is_jalr;
+wire add_to_pc = is_jal | is_jalr | is_auipc;
 wire is_immediate =
-	opcode == JALR || opcode == OPIMM || opcode == STORE || opcode == LOAD ||
-	opcode == BRANCH || opcode == LUI || opcode == AUIPC || opcode == JAL;
+	is_jalr | is_opimm | is_store | is_load |
+	is_branch | is_lui | is_auipc | is_jal;
 
 always @(posedge clk) begin
 	funct = uncond_jump ? 3'b0 : funct3;
-	alu_s1 = add_to_pc ? 5'b0 : rs1;
-	alu_s2 = (add_to_pc || is_immediate) 5'b0 : rs2;
-	{cmp_s1, cmp_s2} = uncond_jump ? 10'b0 : {rs1, rs2};
-	alu_dest = rd;
+	r1 = rs1;
+	r2 = is_immediate ? 5'b0 : rs2;
+	dest_reg = rd;
 	alu_alt = funct7[5];
-	regwrite_src = opcode == LOAD;
-	regwrite_en = !(opcode == STORE || opcode == BRANCH || opcode == SYSTEM);
-	jump_en = opcode == BRANCH || opcode == JALR || opcode == JAL;
-	pcadd_en = add_to_pc;
+	memrd_en = is_load;
+	memwr_en = is_store;
+	regw_en = !(is_store | is_branch | is_system);
+	jump_en = is_branch | is_jalr | is_jal;
+	alupc_en = add_to_pc;
 
 	imm <= 0;
 	case(opcode)
@@ -208,9 +215,120 @@ always @(posedge clk) begin
 end
 endmodule
 
+module pc(
+	input clk,
+	input jump_en,
+	input inc_en,
+	input reset,
+	input [13:0] in_addr,
+	output reg [13:0] out_addr
+);
+reg [31:0] inst_addr;
+
+initial inst_addr = 0;
+
+always @(posedge clk) begin
+	out_addr <= inst_addr;
+	if(reset)
+		inst_addr <= 0;
+	if(inc_en)
+		inst_addr <= inst_addr + 4;
+	if(jump_en)
+		inst_addr <= in_addr;
+end
+endmodule
+
 module cpu(
 	input clk, reset,
 	output reg trap,
 	output reg [31:0] pc
 );
+reg [13:0] data_addr;
+reg [31:0] alu_x, alu_y;
+reg [31:0] cmp_x, cmp_y;
+reg [31:0] rd_data;
+
+wire [31:0] inst;
+wire [13:0] inst_addr;
+wire [4:0] r1_addr, r2_addr;
+wire [31:0] r1_data, r2_data;
+wire [4:0] dest_reg;
+wire [31:0] imm;
+wire [31:0] ram_out;
+wire [31:0] alu_out;
+wire [2:0] funct;
+wire alu_alt;
+wire do_jump;
+wire jump_cond;
+wire alu_add_to_pc;
+wire memread;
+wire memwrite;
+wire writeback;
+
+alu a(
+	.x(alu_x), .y(alu_y),
+	.alt(alu_alt),
+	.op(funct),
+	.out(alu_out)
+);
+
+cmp c(
+	.x(cmp_x), .y(cmp_y),
+	.op(funct),
+	.out(jump_cond)
+);
+
+ram r(
+	.clk(clk),
+	.w_en(memwrite),
+	.u_en(funct[2]),
+	.i_addr(inst_addr),
+	.d_addr(data_addr),
+	.d_in(r2_data),
+	.d_size(funct[1:0]),
+	.d_out(ram_out),
+	.i_out(inst)
+);
+
+regfile rf(
+	.clk(clk),
+	.rd(rd_data),
+	.rd_addr(dest_reg),
+	.r1_addr(r1_addr),
+	.r2_addr(r2_addr),
+	.w_en(writeback),
+	.r1_out(r1_data),
+	.r2_out(r2_data)
+);
+
+ctrl ct(
+	.clk(clk),
+	.inst(inst),
+	.r1(r1_addr),
+	.r2(r2_addr),
+	.dest_reg(dest_reg),
+	.funct(funct),
+	.imm(imm),
+	.alu_alt(alu_alt),
+	.memrd_en(memread),
+	.memwr_en(memwrite),
+	.regw_en(writeback),
+	.jump_en(do_jump),
+	.alupc_en(alu_add_to_pc)
+);
+
+// TODO write test benches for ctrl, regfile and pc
+pc p(
+	.clk(clk),
+	.jump_en(do_jump & jump_cond),
+	.inc_en(~(do_jump & jump_cond)),
+	.reset(1'b0),
+	//.in_addr(),
+	.out_addr(inst_addr)
+);
+
+always @(posedge clk) begin
+	rd_data <= memread ? ram_out : alu_out;
+end
+
 endmodule
