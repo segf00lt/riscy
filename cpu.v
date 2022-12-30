@@ -74,13 +74,6 @@ wire [31:0] sh_mux [0:3];
 wire [31:0] lb_mux [0:3];
 wire [31:0] lh_mux [0:3];
 
-initial begin
-	d_out = 32'b0;
-	i_out = 32'b0;
-	for(integer i = 0; i < 4096; i++)
-		mem[i] = 0;
-end
-
 // setup store
 assign sb_mux[3] = {d_in[7:0], d[23:0]};
 assign sb_mux[2] = {d[31:24], d_in[7:0], d[15:0]};
@@ -223,18 +216,18 @@ module pc(
 	input [13:0] in_addr,
 	output reg [13:0] out_addr
 );
-reg [31:0] inst_addr;
-
-initial inst_addr = 0;
+reg [13:0] inst_addr;
 
 always @(posedge clk) begin
 	out_addr <= inst_addr;
 	if(reset)
 		inst_addr <= 0;
-	if(inc_en)
-		inst_addr <= inst_addr + 4;
-	if(jump_en)
-		inst_addr <= in_addr;
+	else begin
+		if(inc_en & ~jump_en)
+			inst_addr <= inst_addr + 4;
+		if(jump_en & ~inc_en)
+			inst_addr <= in_addr;
+	end
 end
 endmodule
 
