@@ -310,7 +310,6 @@ ctrl ct(
 	.alupc_en(alu_add_to_pc)
 );
 
-// TODO write test benches for ctrl, regfile and pc
 pc p(
 	.clk(clk),
 	.jump_en(do_jump & jump_cond),

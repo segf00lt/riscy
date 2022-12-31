@@ -1,4 +1,4 @@
-test_bench_dump.vcd
+*.vcd
 tags
 *.vim
 CPU.hdl
